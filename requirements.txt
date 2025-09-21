@@ -10,5 +10,10 @@ thefuzz
 python-dotenv
 altair
 pandas
+<<<<<<< HEAD
 fpdf
 langchain-community 
+=======
+fpdf 
+langchain-community
+>>>>>>> 26bd3bed53665d0c99484b862c24e6270d96ffef
