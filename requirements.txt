@@ -10,4 +10,5 @@ thefuzz
 python-dotenv
 altair
 pandas
-fpdf 
+fpdf
+langchain-community 
