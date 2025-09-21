@@ -13,3 +13,5 @@ pandas
 fpdf
 langchain-community 
 fpdf 
+spacy
+spacy[lookups]
