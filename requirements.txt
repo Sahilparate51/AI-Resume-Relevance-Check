@@ -11,3 +11,4 @@ python-dotenv
 altair
 pandas
 fpdf 
+langchain-community
