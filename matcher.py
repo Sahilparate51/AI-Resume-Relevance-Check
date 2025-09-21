@@ -1,7 +1,11 @@
 import os
+import subprocess
 from langchain.prompts import PromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
-from langchain_community.vectorstores import FAISS
+try:
+    from langchain_community.vectorstores import FAISS
+except ImportError:
+    from langchain.vectorstores import FAISS
 from thefuzz import fuzz
 import spacy
 from dotenv import load_dotenv
@@ -11,21 +15,24 @@ load_dotenv()
 os.environ["GOOGLE_API_KEY"] = os.getenv("GOOGLE_API_KEY")
 
 # List of keywords for a more reliable check
-KEYWORD_LIST = ["Python", "SQL", "Machine Learning", "Data Analysis", "Tableau", "Power BI", "R", "pandas", "numpy"]
+KEYWORD_LIST = ["Python", "SQL", "Machine Learning", "Data Analysis",
+                "Tableau", "Power BI", "R", "pandas", "numpy"]
 
-# Load NLP model (download with 'python -m spacy download en_core_web_sm')
+# Load NLP model safely for Streamlit Cloud
 try:
     nlp = spacy.load("en_core_web_sm")
-except:
-    print("Downloading spaCy model. This will happen only once.")
-    spacy.cli.download("en_core_web_sm")
+except OSError:
+    print("Downloading spaCy model into app environment...")
+    subprocess.run(["python", "-m", "spacy", "download", "en_core_web_sm"], check=True)
     nlp = spacy.load("en_core_web_sm")
 
+
 def extract_keywords_with_spacy(text):
-    """A simple function to extract skills and keywords."""
+    """Extract skills and keywords using spaCy."""
     doc = nlp(text)
     keywords = [ent.text for ent in doc.ents if ent.label_ in ['SKILL', 'PROFESSION', 'LANGUAGE']]
     return list(set(keywords))
+
 
 def hard_match_score(resume_text, jd_text):
     """Calculates a score based on keyword and skill matching."""
@@ -50,22 +57,24 @@ def hard_match_score(resume_text, jd_text):
     score = (match_count / len(found_jd_keywords)) * 100
     return score, missing_skills
 
+
 def semantic_match_score(resume_text, jd_text):
-    """Calculates a semantic similarity score using embeddings and FAISS."""
+    """Calculates semantic similarity score using embeddings + FAISS."""
     try:
         embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
         vector_store = FAISS.from_texts([jd_text], embeddings)
         
         docs = vector_store.similarity_search_with_score(resume_text, k=1)
-        score = docs[0][1] # Get the similarity score
-        
-        return score * 100
+        distance = docs[0][1]
+        similarity = max(0, 1 - distance)  # convert distance to similarity
+        return similarity * 100
     except Exception as e:
         print(f"Error during semantic matching: {e}")
         return 0
 
+
 def generate_llm_feedback(resume_text, jd_text, verdict, missing_skills):
-    """Generates personalized feedback using an LLM."""
+    """Generates personalized feedback using Gemini LLM."""
     try:
         llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.5)
 
@@ -101,10 +110,11 @@ def generate_llm_feedback(resume_text, jd_text, verdict, missing_skills):
     except Exception as e:
         return f"Could not generate feedback. Check your API key. Error: {e}"
 
+
 def calculate_final_score(hard_score, semantic_score):
     """Calculates a weighted final score."""
-    final_score = (hard_score * 0.6) + (semantic_score * 0.4)
-    return final_score
+    return (hard_score * 0.6) + (semantic_score * 0.4)
+
 
 def get_verdict(score):
     """Assigns a verdict based on the final score."""
