@@ -1,40 +1,43 @@
 import os
-import subprocess
 from langchain.prompts import PromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 try:
     from langchain_community.vectorstores import FAISS
+    print("Using langchain_community.vectorstores.FAISS")
 except ImportError:
     from langchain.vectorstores import FAISS
+    print("Using langchain.vectorstores.FAISS")
 from thefuzz import fuzz
 import spacy
 from dotenv import load_dotenv
 
-# Load environment variables for API keys
+# ----------------- ENVIRONMENT SETUP -----------------
 load_dotenv()
 os.environ["GOOGLE_API_KEY"] = os.getenv("GOOGLE_API_KEY")
 
-# List of keywords for a more reliable check
-KEYWORD_LIST = ["Python", "SQL", "Machine Learning", "Data Analysis",
-                "Tableau", "Power BI", "R", "pandas", "numpy"]
+# ----------------- CONSTANTS -----------------
+KEYWORD_LIST = [
+    "Python", "SQL", "Machine Learning", "Data Analysis",
+    "Tableau", "Power BI", "R", "pandas", "numpy"
+]
 
-# Load NLP model safely for Streamlit Cloud
-try:
-    nlp = spacy.load("en_core_web_sm")
-except OSError:
-    print("Downloading spaCy model into app environment...")
-    subprocess.run(["python", "-m", "spacy", "download", "en_core_web_sm"], check=True)
-    nlp = spacy.load("en_core_web_sm")
+# ----------------- SPACY NLP LOADING -----------------
+# IMPORTANT: en_core_web_sm must be installed via requirements.txt
+# Example in requirements.txt:
+# spacy==3.8.7
+# https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl
+nlp = spacy.load("en_core_web_sm")
 
 
-def extract_keywords_with_spacy(text):
-    """Extract skills and keywords using spaCy."""
+# ----------------- FUNCTIONS -----------------
+def extract_keywords_with_spacy(text: str):
+    """Extract skills and keywords using spaCy entities."""
     doc = nlp(text)
     keywords = [ent.text for ent in doc.ents if ent.label_ in ['SKILL', 'PROFESSION', 'LANGUAGE']]
     return list(set(keywords))
 
 
-def hard_match_score(resume_text, jd_text):
+def hard_match_score(resume_text: str, jd_text: str):
     """Calculates a score based on keyword and skill matching."""
     jd_text_lower = jd_text.lower()
     resume_text_lower = resume_text.lower()
@@ -58,7 +61,7 @@ def hard_match_score(resume_text, jd_text):
     return score, missing_skills
 
 
-def semantic_match_score(resume_text, jd_text):
+def semantic_match_score(resume_text: str, jd_text: str):
     """Calculates semantic similarity score using embeddings + FAISS."""
     try:
         embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
@@ -66,14 +69,16 @@ def semantic_match_score(resume_text, jd_text):
         
         docs = vector_store.similarity_search_with_score(resume_text, k=1)
         distance = docs[0][1]
-        similarity = max(0, 1 - distance)  # convert distance to similarity
+
+        # convert distance → similarity safely
+        similarity = max(0.0, min(1.0, 1 - distance))
         return similarity * 100
     except Exception as e:
         print(f"Error during semantic matching: {e}")
         return 0
 
 
-def generate_llm_feedback(resume_text, jd_text, verdict, missing_skills):
+def generate_llm_feedback(resume_text: str, jd_text: str, verdict: str, missing_skills: list):
     """Generates personalized feedback using Gemini LLM."""
     try:
         llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.5)
@@ -111,12 +116,12 @@ def generate_llm_feedback(resume_text, jd_text, verdict, missing_skills):
         return f"Could not generate feedback. Check your API key. Error: {e}"
 
 
-def calculate_final_score(hard_score, semantic_score):
+def calculate_final_score(hard_score: float, semantic_score: float):
     """Calculates a weighted final score."""
     return (hard_score * 0.6) + (semantic_score * 0.4)
 
 
-def get_verdict(score):
+def get_verdict(score: float):
     """Assigns a verdict based on the final score."""
     if score >= 80:
         return "High suitability"
