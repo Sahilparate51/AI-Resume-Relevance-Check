@@ -1,0 +1,13 @@
+streamlit
+PyMuPDF
+python-docx
+spacy
+langchain
+langchain-google-genai
+langgraph
+faiss-cpu
+thefuzz
+python-dotenv
+altair
+pandas
+fpdf 
